@@ -16,20 +16,23 @@
 
 #include "shell_memory.h"
 
+
+// Allocate a new char** pointer to hold new arguments
 void* allocArgv(int argc) {
     char** argv = malloc(sizeof(char *) * argc + 1);
     argv[argc] = NULL;
     return (void*)argv;
 }
 
+// Stuff arguments into the char** pointer as doing this
+// strictly in Go sucks.
 void addArg(void* argv, char* arg, int i) {
     ((char**)argv)[i] = arg;
 }
 
-
+// Find the entry point command by searching through base's load commands.
+// This will give us the offset required to execute the MachO
 int find_epc(unsigned long base, struct entry_point_command **entry) {
-	// find the entry point command by searching through base's load commands
-
 	struct mach_header_64 *mh;
 	struct load_command *lc;
 
@@ -51,23 +54,18 @@ int find_epc(unsigned long base, struct entry_point_command **entry) {
 	return 1;
 }
 
+// Executes a MachO (given by fileBytes) with requisite arguments.
 int execMachO(char* fileBytes, int szFile, int argc, void* argv) {
     NSObjectFileImage fileImage = NULL;
 	NSModule module = NULL;
 	NSSymbol symbol = NULL;
     void* pSymbolAddress = NULL;
 
-	//struct stat stat_buf;
 	int(*main)(int, char**, char**, char**);
-	//printf("setting memory value\n");
     int type = ((int *)fileBytes)[3];
-    // printf("type: %08d\n", type);
 	if(type != 0x8) ((int *)fileBytes)[3] = 0x8; //change to mh_bundle type
-    // printf("type after setting: %08d\n", type);
-    // *((uint8_t*)file_bytes + 12) =  0x08;
-    //printf("set value\n");
 	NSCreateObjectFileImageFromMemory(fileBytes, szFile, &fileImage);
-	//printf("created file image\n");
+
 	if(fileImage == NULL){
 		return -1;
 	}
@@ -87,17 +85,14 @@ int execMachO(char* fileBytes, int szFile, int argc, void* argv) {
 
         unsigned long tmp = pSymbolAddress + epc->entryoff;
         printf("Invoking addr: 0x%llX (symbol addr: 0x%llX, epc->entroff is 0x%llX)\n", tmp, pSymbolAddress, epc->entryoff);
-        // int(*main)(int, char**, char**, char**) = (int(*)(int, char**, char**, char**))(execute_base + epc->entryoff);
         main = (int(*)(int, char**, char**, char**)) (tmp);
-    	//printf("got main\n");
-    	if(main == NULL){
+
+        if(main == NULL){
     		printf("Failed to find address of main\n");
     	}
-        char *env[] = {NULL};
 
-		// char *apple[] = {GLOBAL_ARGV[0], NULL};
-        main(argc, (char**)argv, NULL, NULL);
-		// main(argc, c_argv, env, apple);
+		main(argc, (char**)argv, NULL, NULL);
+
         NSUnLinkModule(module, NSLINKMODULE_OPTION_PRIVATE | NSLINKMODULE_OPTION_BINDNOW);
     	NSDestroyObjectFileImage(fileImage);
         return 0;
