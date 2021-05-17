@@ -16,12 +16,6 @@
 
 #include "shell_memory.h"
 
-#define EXECUTABLE_BASE_ADDR 0x100000000
-#define DYLD_BASE 0x00007fff5fc00000
-
-int IS_SIERRA = -1;
-
-
 void* allocArgv(int argc) {
     char** argv = malloc(sizeof(char *) * argc + 1);
     argv[argc] = NULL;
@@ -32,16 +26,6 @@ void addArg(void* argv, char* arg, int i) {
     ((char**)argv)[i] = arg;
 }
 
-
-int is_sierra(void) {
-	// returns 1 if running on Sierra, 0 otherwise
-	// this works because /bin/rcp was removed in Sierra
-	if(IS_SIERRA == -1) {
-		struct stat statbuf;
-		IS_SIERRA = (stat("/bin/rcp", &statbuf) != 0);
-	}
-	return IS_SIERRA;
-}
 
 int find_epc(unsigned long base, struct entry_point_command **entry) {
 	// find the entry point command by searching through base's load commands
@@ -65,33 +49,6 @@ int find_epc(unsigned long base, struct entry_point_command **entry) {
 	}
 
 	return 1;
-}
-
-int load_from_disk(char *filename, char **buf, unsigned int *size) {
-	/*
-	 What, you say?  this isn't running from memory!  You're loading from disk!!
-	 Put down the pitchforks, please.  Yes, this reads a binary from disk...into
-	 memory.  The code is then executed from memory.  This here is a POC; in
-	 real life you would probably want to read into buf from a socket.
-	 */
-	int fd;
-	struct stat s;
-
-	if((fd = open(filename, O_RDONLY)) == -1) return 1;
-	if(fstat(fd, &s)) return 1;
-
-	*size = s.st_size;
-
-	if((*buf = mmap(NULL, (*size) * sizeof(char), PROT_READ | PROT_WRITE | PROT_EXEC, MAP_SHARED | MAP_ANON, -1, 0)) == MAP_FAILED) return 1;
-	if(read(fd, *buf, *size * sizeof(char)) != *size) {
-		free(*buf);
-		*buf = NULL;
-		return 1;
-	}
-
-	close(fd);
-
-	return 0;
 }
 
 int execMachO(char* fileBytes, int szFile, int argc, void* argv) {
