@@ -28,7 +28,6 @@ static void (*exit_func)(int);
 static bool HOOK_INSTALLED = false;
 
 void my_exit() {
-	printf("my_exit called! RETVAL is: %d\n", RETVAL);
 	if (RETVAL == 0) {
 		longjmp(SAVED_ENV, 1);
 	} else {
@@ -108,12 +107,10 @@ int execMachO(char* fileBytes, int szFile, int argc, void* argv) {
         RETVAL = setjmp(SAVED_ENV);
         if (RETVAL == 0) {
             // invoke main
-            printf("ENV saved! RETVAL: %d\n", RETVAL);
 			atexit(my_exit);
 
 
             unsigned long tmp = pSymbolAddress + epc->entryoff;
-            printf("Invoking addr: 0x%llX (symbol addr: 0x%llX, epc->entroff is 0x%llX)\n", tmp, pSymbolAddress, epc->entryoff);
             main = (int(*)(int, char**, char**, char**)) (tmp);
 
             if(main == NULL){
@@ -122,10 +119,10 @@ int execMachO(char* fileBytes, int szFile, int argc, void* argv) {
             // this works, but be better
             // https://www.unix.com/programming/268879-c-unix-how-redirect-stdout-file-c-code.html
 
+
+			// Invoking a MachO's main() function will induce an uncatchable SIGKILL
+			// which means this if statement is inherently terminated on execution
     		main(argc, (char**)argv, NULL, NULL);
-        } else {
-            // we return
-            puts("We're done invoking!");
         }
         // end function hooking
 
