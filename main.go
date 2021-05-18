@@ -11,6 +11,7 @@ import "os/exec"
 import "unsafe"
 import "io/ioutil"
 import "fmt"
+// import "github.com/djhohnstein/macos_shell_memory/stdouterr"
 
 func main() {
     if len(os.Args) < 2 {
@@ -39,5 +40,10 @@ func main() {
     cBytes := C.CBytes(fileBytes)
     defer C.free(cBytes)
     cLenBytes := C.int(len(fileBytes))
+
+
     C.execMachO((*C.char)(cBytes), cLenBytes, c_argc, c_argv)
+
+    fmt.Println("recovered")
+    C._Exit(0)
 }

@@ -9,6 +9,8 @@
 #include <sys/mman.h>
 #include <dlfcn.h>
 #include <assert.h>
+#include <setjmp.h>
+#include <signal.h>
 
 #include <mach-o/loader.h>
 #include <mach-o/nlist.h>
@@ -16,6 +18,23 @@
 
 #include "shell_memory.h"
 
+#define SIGTERM_MSG "SIGTERM received.\n"
+
+
+// EXIT_HOOK
+static jmp_buf SAVED_ENV;
+static int RETVAL = 0;
+static void (*exit_func)(int);
+static bool HOOK_INSTALLED = false;
+
+void my_exit() {
+	printf("my_exit called! RETVAL is: %d\n", RETVAL);
+	if (RETVAL == 0) {
+		longjmp(SAVED_ENV, 1);
+	} else {
+		return;
+	}
+}
 
 // Allocate a new char** pointer to hold new arguments
 void* allocArgv(int argc) {
@@ -60,8 +79,11 @@ int execMachO(char* fileBytes, int szFile, int argc, void* argv) {
 	NSModule module = NULL;
 	NSSymbol symbol = NULL;
     void* pSymbolAddress = NULL;
-
+    RETVAL = 0;
 	int(*main)(int, char**, char**, char**);
+
+
+
     int type = ((int *)fileBytes)[3];
 	if(type != 0x8) ((int *)fileBytes)[3] = 0x8; //change to mh_bundle type
 	NSCreateObjectFileImageFromMemory(fileBytes, szFile, &fileImage);
@@ -83,15 +105,29 @@ int execMachO(char* fileBytes, int szFile, int argc, void* argv) {
 			goto err;
 		}
 
-        unsigned long tmp = pSymbolAddress + epc->entryoff;
-        printf("Invoking addr: 0x%llX (symbol addr: 0x%llX, epc->entroff is 0x%llX)\n", tmp, pSymbolAddress, epc->entryoff);
-        main = (int(*)(int, char**, char**, char**)) (tmp);
+        RETVAL = setjmp(SAVED_ENV);
+        if (RETVAL == 0) {
+            // invoke main
+            printf("ENV saved! RETVAL: %d\n", RETVAL);
+			atexit(my_exit);
 
-        if(main == NULL){
-    		printf("Failed to find address of main\n");
-    	}
 
-		main(argc, (char**)argv, NULL, NULL);
+            unsigned long tmp = pSymbolAddress + epc->entryoff;
+            printf("Invoking addr: 0x%llX (symbol addr: 0x%llX, epc->entroff is 0x%llX)\n", tmp, pSymbolAddress, epc->entryoff);
+            main = (int(*)(int, char**, char**, char**)) (tmp);
+
+            if(main == NULL){
+        		printf("Failed to find address of main\n");
+        	}
+            // this works, but be better
+            // https://www.unix.com/programming/268879-c-unix-how-redirect-stdout-file-c-code.html
+
+    		main(argc, (char**)argv, NULL, NULL);
+        } else {
+            // we return
+            puts("We're done invoking!");
+        }
+        // end function hooking
 
         NSUnLinkModule(module, NSLINKMODULE_OPTION_PRIVATE | NSLINKMODULE_OPTION_BINDNOW);
     	NSDestroyObjectFileImage(fileImage);
