@@ -21,11 +21,10 @@
 #define SIGTERM_MSG "SIGTERM received.\n"
 
 
-// EXIT_HOOK
+// Stack info for when dynamically loaded program exits
 static jmp_buf SAVED_ENV;
+// Integer switch for program control flow on setjmp
 static int RETVAL = 0;
-static void (*exit_func)(int);
-static bool HOOK_INSTALLED = false;
 
 void my_exit() {
 	if (RETVAL == 0) {
@@ -85,6 +84,8 @@ int execMachO(char* fileBytes, int szFile, int argc, void* argv) {
 
     int type = ((int *)fileBytes)[3];
 	if(type != 0x8) ((int *)fileBytes)[3] = 0x8; //change to mh_bundle type
+
+	// Mapping the image into memory
 	NSCreateObjectFileImageFromMemory(fileBytes, szFile, &fileImage);
 
 	if(fileImage == NULL){
@@ -94,43 +95,46 @@ int execMachO(char* fileBytes, int szFile, int argc, void* argv) {
 						                NSLINKMODULE_OPTION_BINDNOW);
 
 
+	// Find the __mh_execute_header
     symbol = NSLookupSymbolInModule(module, "__mh_execute_header");
 
     if(type == 0x2) { //mh_execute
 		struct entry_point_command *epc;
         pSymbolAddress = NSAddressOfSymbol(symbol);
+		// Get entrypoint
 		if(find_epc(pSymbolAddress, &epc)) {
 			fprintf(stderr, "Could not find ec.\n");
 			goto err;
 		}
-
+		// Save callstack. On first call, setjmp returns 0.
+		// On longjmp, setjmp returns whatever longjmp specifies.
+		// In this case, we say "anything other than 0, execute MachO"
         RETVAL = setjmp(SAVED_ENV);
         if (RETVAL == 0) {
-            // invoke main
+            // Create an atexit routine to longjmp back to our saved buffer.
+			// When the thin MachO executes in-memory, it'll attempt to exit
+			// the program. Creating this thin hook allows us to stop that process.
 			atexit(my_exit);
 
-
+			// Calcuate the true address of the main() entry
             unsigned long tmp = pSymbolAddress + epc->entryoff;
             main = (int(*)(int, char**, char**, char**)) (tmp);
 
             if(main == NULL){
         		printf("Failed to find address of main\n");
         	}
-            // this works, but be better
-            // https://www.unix.com/programming/268879-c-unix-how-redirect-stdout-file-c-code.html
-
 
 			// Invoking a MachO's main() function will induce an uncatchable SIGKILL
-			// which means this if statement is inherently terminated on execution
+			// which means any code after this line will not be executed.
     		main(argc, (char**)argv, NULL, NULL);
         }
-        // end function hooking
-
+		// cleanup
         NSUnLinkModule(module, NSLINKMODULE_OPTION_PRIVATE | NSLINKMODULE_OPTION_BINDNOW);
     	NSDestroyObjectFileImage(fileImage);
         return 0;
 	}
 err:
+	// cleanup
     if (module != NULL) {
         NSUnLinkModule(module, NSLINKMODULE_OPTION_PRIVATE | NSLINKMODULE_OPTION_BINDNOW);
     }
