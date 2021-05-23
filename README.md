@@ -67,3 +67,7 @@ drwxr-xr-x   5 djh  staff   160B May 18 16:04 ..
 -rw-r--r--   1 djh  staff   143B May 16 17:09 shell_memory.h
 
 ```
+
+## References
+- https://blogs.blackberry.com/en/2017/02/running-executables-on-macos-from-memory
+- https://github.com/MythicAgents/poseidon/blob/master/Payload_Type/poseidon/agent_code/execute_memory/execute_memory_darwin.m
