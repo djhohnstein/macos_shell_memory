@@ -1,6 +1,6 @@
 # Execute Thin Mach-O Binaries in Memory
 
-This is a CGo implementation of the initial technique put forward by [Stephanie Archibald](https://blogs.blackberry.com/en/author/stephanie-archibald) in her blog, [Running Executables on macOS From Memory](https://blogs.blackberry.com/en/2017/02/running-executables-on-macos-from-memory).
+This is a CGo implementation of the initial technique put forward by [Stephanie Archibald](https://twitter.com/@ParchedMind) in her blog, [Running Executables on macOS From Memory](https://blogs.blackberry.com/en/2017/02/running-executables-on-macos-from-memory).
 
 ## Usage
 
